@@ -2,23 +2,39 @@ import json
 import sqlite3
 from openai import OpenAI
 
-client = None  # Se inicializa en app.py
+client = None  # Será configurado desde app.py
+
+
+SYSTEM_MESSAGE = """
+Eres KRATOS, un asistente virtual especializado exclusivamente en responder preguntas 
+sobre el catálogo de productos almacenado en la base de datos.
+
+Reglas:
+- SOLO puedes responder preguntas relacionadas al catálogo.
+- La única información válida proviene de products_data.
+- Si el usuario pregunta algo fuera del catálogo, responde:
+  "Puedo ayudarte únicamente con consultas sobre nuestro catálogo de productos."
+- Mantén un tono amable, profesional y claro.
+- La moneda es el Sol Peruano (S/).
+- Si se devuelven 5 productos, menciona que es una muestra limitada.
+- No inventes información externa.
+"""
 
 
 def generate_sql(user_query):
     prompt = f"""
-Convierte esta consulta del usuario en SQL para SQLite.
+Convierte esta consulta del usuario en SQL válido para SQLite.
 
 Reglas:
-- SOLO SQL, sin explicaciones.
-- LIMIT máximo = 5.
-- Si piden "más caro": ORDER BY prod_price DESC LIMIT 1.
-- Si piden "baratos": ORDER BY prod_price ASC LIMIT 5.
-- Si piden "ejemplo": ORDER BY RANDOM() LIMIT 1.
+- SOLO devuelve SQL, sin explicaciones.
+- Máximo LIMIT 5.
+- "más caro" → ORDER BY prod_price DESC LIMIT 1
+- "más baratos" → ORDER BY prod_price ASC LIMIT 5
+- "ejemplo" → ORDER BY RANDOM() LIMIT 1
 - Solo productos con status = 1.
-- Si piden por categoría/familia: WHERE prod_family LIKE '%texto%' LIMIT 5.
+- Si mencionan categoría o familia: WHERE prod_family LIKE '%texto%' LIMIT 5
 
-Consulta: {user_query}
+Consulta del usuario: {user_query}
 """
 
     response = client.chat.completions.create(
@@ -52,25 +68,38 @@ def run_sql_query(sql_query):
     return results
 
 
-def generate_chatbot_response(user_query, product_data):
-    system_msg = """
-Eres un asistente de ventas amable.
-Si hay productos, descríbelos con precio en Soles (S/).
-Si no hay productos, di que solo puedes ayudar con el catálogo.
-"""
+def generate_chatbot_response(user_query, product_data, first_message=False):
+    if first_message:
+        intro = (
+            "Hola, soy **KRATOS**, tu asistente virtual del catálogo.\n"
+            "Fui desarrollado por el **Dr. Yeltsin**.\n"
+            "Estoy aquí para ayudarte únicamente con consultas sobre nuestros productos.\n\n"
+        )
+    else:
+        intro = ""
 
     if product_data:
-        data = json.dumps(product_data, indent=2)
-        prompt = f"El usuario preguntó: {user_query}\nProductos encontrados:\n{data}\nCrea una respuesta clara y amable."
+        data_json = json.dumps(product_data, indent=2)
+        user_prompt = (
+            f"{intro}"
+            f"El usuario preguntó: {user_query}\n"
+            f"Productos encontrados:\n{data_json}\n\n"
+            "Genera una respuesta clara usando solo estos datos."
+        )
     else:
-        prompt = f"El usuario preguntó: {user_query}\nNo hay productos."
+        user_prompt = (
+            f"{intro}"
+            f"El usuario preguntó: {user_query}\n"
+            "No se encontraron productos.\n"
+            "Recuerda que solo puedes responder sobre el catálogo."
+        )
 
     response = client.chat.completions.create(
         model="gpt-4.1-mini",
         messages=[
-            {"role": "system", "content": system_msg},
-            {"role": "user", "content": prompt}
-        ],
+            {"role": "system", "content": SYSTEM_MESSAGE},
+            {"role": "user", "content": user_prompt}
+        ]
     )
 
     return response.choices[0].message["content"]
