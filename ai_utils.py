@@ -18,9 +18,9 @@ Reglas:
 """
 
 
-# ---------------------------
+# ---------------------------------------
 # GENERAR SQL
-# ---------------------------
+# ---------------------------------------
 
 def generate_sql(client, user_query):
     prompt = f"""
@@ -29,9 +29,9 @@ Convierte esta consulta del usuario en SQL válido para SQLite.
 Reglas:
 - SOLO devolver SQL.
 - Máximo LIMIT 5.
-- "más caro" → ORDER BY prod_price DESC LIMIT 1
-- "más baratos" → ORDER BY prod_price ASC LIMIT 5
-- "ejemplo" → ORDER BY RANDOM() LIMIT 1
+    "más caro" → ORDER BY prod_price DESC LIMIT 1
+    "más baratos" → ORDER BY prod_price ASC LIMIT 5
+    "ejemplo" → ORDER BY RANDOM() LIMIT 1
 - Solo productos con status = 1.
 - Categorías → WHERE prod_family LIKE '%texto%' LIMIT 5
 
@@ -44,12 +44,12 @@ Consulta del usuario: {user_query}
         temperature=0
     )
 
-    return response.choices[0].message["content"].strip()
+    return response.choices[0].message.content.strip()
 
 
-# ---------------------------
+# ---------------------------------------
 # EJECUTAR SQL
-# ---------------------------
+# ---------------------------------------
 
 def run_sql_query(sql_query):
     conn = sqlite3.connect("productos_soles.db")
@@ -73,9 +73,9 @@ def run_sql_query(sql_query):
     return results
 
 
-# ---------------------------
-# GENERAR RESPUESTA PARA KRATOS
-# ---------------------------
+# ---------------------------------------
+# RESPUESTA DEL CHATBOT
+# ---------------------------------------
 
 def generate_chatbot_response(client, user_query, product_data, first_message=False):
 
@@ -112,4 +112,4 @@ def generate_chatbot_response(client, user_query, product_data, first_message=Fa
         ]
     )
 
-    return response.choices[0].message["content"]
+    return response.choices[0].message.content
