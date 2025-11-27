@@ -13,10 +13,14 @@ from ai_utils import client, generate_sql, run_sql_query, generate_chatbot_respo
 def get_client():
     # Streamlit Cloud → usa secrets
     if "OPENAI_API_KEY" in st.secrets:
-        return OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-    
-    # Local
-    return OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
+        return OpenAI()   # NO usar api_key aquí
+
+    # Local (variable de entorno)
+    if os.getenv("OPENAI_API_KEY"):
+        return OpenAI()   # NO usar api_key aquí
+
+    return None
 
 client = get_client()
 
@@ -26,12 +30,12 @@ client = get_client()
 # ---------------------------
 
 st.set_page_config(page_title="KRATOS — Asistente de Tienda", page_icon="🤖")
-st.title("🤖 KRATOS — Asistente de Virtual")
+st.title("🤖 KRATOS — Asistente Virtual")
 
 st.image(
     "https://cdn-icons-png.flaticon.com/512/4712/4712109.png",
     width=130,
-    caption="KRATOS — Asistente de Virtual"
+    caption="KRATOS — Asistente Virtual"
 )
 
 
@@ -50,21 +54,24 @@ if "chat_history" not in st.session_state:
 user_query = st.text_input("💬 Realiza una consulta sobre el catálogo:")
 
 if st.button("Enviar"):
-    sql = generate_sql(user_query)
-    st.code(sql, language="sql")
+    if client is None:
+        st.error("❌ No se ha configurado la API Key de OpenAI.")
+    else:
+        sql = generate_sql(user_query)
+        st.code(sql, language="sql")
 
-    data = run_sql_query(sql)
+        data = run_sql_query(sql)
 
-    first_message = len(st.session_state.chat_history) == 0
+        first_message = len(st.session_state.chat_history) == 0
 
-    response = generate_chatbot_response(
-        user_query,
-        data,
-        first_message=first_message
-    )
+        response = generate_chatbot_response(
+            user_query,
+            data,
+            first_message=first_message
+        )
 
-    st.session_state.chat_history.append(("Usuario", user_query))
-    st.session_state.chat_history.append(("KRATOS", response))
+        st.session_state.chat_history.append(("Usuario", user_query))
+        st.session_state.chat_history.append(("KRATOS", response))
 
 
 # MOSTRAR HISTORIAL
