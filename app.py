@@ -1,36 +1,27 @@
 import streamlit as st
 from openai import OpenAI
 import os
+from streamlit_webrtc import webrtc_streamer, AudioProcessorBase
+from webrtc_utils import convert_frames_to_wav
 
 from db_utils import setup_database
 from ai_utils import generate_sql, run_sql_query, generate_chatbot_response
 
-
-# ---------------------------------------
-# CLIENTE OPENAI SEGURO
-# ---------------------------------------
-
+# ---------------------------
+# CONFIG CLIENTE OPENAI
+# ---------------------------
 def get_client():
-    # Streamlit Cloud → usa secrets
-    if "OPENAI_API_KEY" in st.secrets:
-        os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
-        return OpenAI()   # SDK nuevo → sin parámetros
-
-    # Local (variable de entorno)
-    if os.getenv("OPENAI_API_KEY"):
-        return OpenAI()
-
-    return None
-
+    api_key = st.secrets.get("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        return None
+    return OpenAI(api_key=api_key)
 
 client = get_client()
 
-
-# ---------------------------------------
-# UI
-# ---------------------------------------
-
-st.set_page_config(page_title="KRATOS — Asistente de Tienda", page_icon="🤖")
+# ---------------------------
+# STREAMLIT
+# ---------------------------
+st.set_page_config(page_title="KRATOS — Asistente Virtual", page_icon="🤖")
 st.title("🤖 KRATOS — Asistente Virtual")
 
 st.image(
@@ -39,89 +30,100 @@ st.image(
     caption="KRATOS — Asistente Virtual"
 )
 
-
-# ---------------------------------------
-# BOTÓN PARA CREAR BD
-# ---------------------------------------
-
+# ---------------------------
+# BOTÓN BDD
+# ---------------------------
 if st.button("📦 Crear Base de Datos (500 productos)"):
     setup_database()
     st.success("Base de datos creada exitosamente con 500 productos.")
 
 
-# ---------------------------------------
+# ---------------------------------------------------
 # HISTORIAL DEL CHAT
-# ---------------------------------------
-
+# ---------------------------------------------------
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
-st.subheader("🗂️ Conversación")
+
+# ---------------------------------------------------
+# MOSTRAR HISTORIAL
+# ---------------------------------------------------
+st.subheader("📁 Conversación")
 for speaker, text in st.session_state.chat_history:
     st.markdown(f"**{speaker}:** {text}")
 
 
-# ---------------------------------------
-# INPUT: TEXTO + VOZ (Speech-to-Text)
-# ---------------------------------------
+# ---------------------------------------------------
+# PROCESADOR DE AUDIO (STREAMLIT-WEBRTC)
+# ---------------------------------------------------
+class AudioProcessor(AudioProcessorBase):
+    def __init__(self):
+        self.frames = []
 
-st.write("### 🎤 Puedes escribir o hablarle a KRATOS")
+    def recv_audio(self, frame):
+        self.frames.append(frame)
+        return frame
 
-col1, col2 = st.columns([2, 1])
 
-# 📌 Entrada por texto
-with col1:
-    user_query = st.chat_input("Escribe tu consulta y presiona ENTER:")
+st.subheader("🎙️ Puedes hablarle a KRATOS")
 
-# 📌 Entrada por voz (audio)
-with col2:
-    audio_file = st.file_uploader(
-        "Habla con KRATOS (wav/mp3/m4a)",
-        type=["wav", "mp3", "m4a"],
-        accept_multiple_files=False
-    )
+webrtc_ctx = webrtc_streamer(
+    key="speech-to-text-kratos",
+    mode="receive",
+    audio_receiver_size=2048,
+    media_stream_constraints={"audio": True, "video": False},
+    async_processing=True,
+)
 
-    audio_transcribed = None
 
-    if audio_file is not None:
-        st.audio(audio_file)
+# ---------------------------------------------------
+# PROCESAR AUDIO GRABADO
+# ---------------------------------------------------
+if webrtc_ctx and webrtc_ctx.state.playing:
+    if webrtc_ctx.audio_receiver:
+        frames = webrtc_ctx.audio_receiver.get_frames(timeout=1)
+        if frames:
+            wav_audio = convert_frames_to_wav(frames)
 
-        with st.spinner("🎧 Transcribiendo tu voz..."):
+            st.info("🎤 Procesando audio...")
+
             transcript = client.audio.transcriptions.create(
                 model="gpt-4o-transcribe",
-                file=audio_file
-            )
-            audio_transcribed = transcript.text
+                file=("audio.wav", wav_audio)
+            ).text
 
-        st.success("✔️ Tu voz fue convertida a texto")
-        st.write(f"🗣️ **Dijiste:** {audio_transcribed}")
+            st.success(f"🗣️ Dijiste: {transcript}")
 
-        user_query = audio_transcribed
+            # Guardar en historial
+            st.session_state.chat_history.append(("Usuario (audio)", transcript))
+
+            # Ejecutar consulta SQL
+            sql_query = generate_sql(client, transcript)
+            products = run_sql_query(sql_query)
+
+            # Generar respuesta KRATOS
+            first_msg = len(st.session_state.chat_history) == 0
+            answer = generate_chatbot_response(client, transcript, products, first_msg)
+
+            st.session_state.chat_history.append(("KRATOS", answer))
+            st.rerun()
 
 
-# ---------------------------------------
-# PROCESAR CONSULTA
-# ---------------------------------------
+# ---------------------------------------------------
+# INPUT DE TEXTO
+# ---------------------------------------------------
+st.subheader("⌨️ O escríbele a KRATOS")
 
-if user_query:
-    if client is None:
-        st.error("❌ No se ha configurado la API Key de OpenAI.")
-    else:
-        sql = generate_sql(client, user_query)
-        st.code(sql, language="sql")
+user_text = st.chat_input("Escribe tu consulta y presiona ENTER")
 
-        data = run_sql_query(sql)
+if user_text:
+    st.session_state.chat_history.append(("Usuario", user_text))
 
-        first_message = len(st.session_state.chat_history) == 0
+    sql = generate_sql(client, user_text)
+    products = run_sql_query(sql)
 
-        response = generate_chatbot_response(
-            client,
-            user_query,
-            data,
-            first_message
-        )
+    first_msg = len(st.session_state.chat_history) == 0
+    answer = generate_chatbot_response(client, user_text, products, first_msg)
 
-        st.session_state.chat_history.append(("Usuario", user_query))
-        st.session_state.chat_history.append(("KRATOS", response))
-
-        st.rerun()
+    st.session_state.chat_history.append(("KRATOS", answer))
+    st.rerun()
