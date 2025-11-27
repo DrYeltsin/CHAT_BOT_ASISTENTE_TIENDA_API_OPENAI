@@ -9,12 +9,12 @@ from ai_utils import client, generate_sql, run_sql_query, generate_chatbot_respo
 
 st.set_page_config(page_title="KRATOS — Asistente de Tienda", page_icon="🤖")
 
-st.title("🤖 KRATOS — Asistente de Catálogo")
+st.title("🤖 KRATOS — Asistente Virtual")
 
 st.image(
     "https://cdn-icons-png.flaticon.com/512/4712/4712109.png",
     width=130,
-    caption="KRATOS — Asistente de productos"
+    caption="KRATOS — Asistente Virtual"
 )
 
 # API KEY
