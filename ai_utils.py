@@ -2,7 +2,7 @@ import json
 import sqlite3
 from openai import OpenAI
 
-client = None  # Será configurado desde app.py
+client = None  # Se configura desde app.py
 
 
 SYSTEM_MESSAGE = """
@@ -26,7 +26,7 @@ def generate_sql(user_query):
 Convierte esta consulta del usuario en SQL válido para SQLite.
 
 Reglas:
-- SOLO devuelve SQL, sin explicaciones.
+- SOLO devuelve SQL.
 - Máximo LIMIT 5.
 - "más caro" → ORDER BY prod_price DESC LIMIT 1
 - "más baratos" → ORDER BY prod_price ASC LIMIT 5
