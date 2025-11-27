@@ -3,7 +3,7 @@ from openai import OpenAI
 import os
 
 from db_utils import setup_database
-from ai_utils import client, generate_sql, run_sql_query, generate_chatbot_response
+from ai_utils import generate_sql, run_sql_query, generate_chatbot_response
 
 
 # ---------------------------
@@ -14,13 +14,14 @@ def get_client():
     # Streamlit Cloud → usa secrets
     if "OPENAI_API_KEY" in st.secrets:
         os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
-        return OpenAI()   # NO usar api_key aquí
+        return OpenAI()   # SDK nuevo → sin parámetros
 
     # Local (variable de entorno)
     if os.getenv("OPENAI_API_KEY"):
-        return OpenAI()   # NO usar api_key aquí
+        return OpenAI()
 
     return None
+
 
 client = get_client()
 
@@ -57,19 +58,25 @@ if st.button("Enviar"):
     if client is None:
         st.error("❌ No se ha configurado la API Key de OpenAI.")
     else:
-        sql = generate_sql(user_query)
+        # Generar SQL usando el cliente
+        sql = generate_sql(client, user_query)
         st.code(sql, language="sql")
 
+        # Ejecutar SQL
         data = run_sql_query(sql)
 
+        # Saber si es la primera interacción
         first_message = len(st.session_state.chat_history) == 0
 
+        # Generar la respuesta de KRATOS
         response = generate_chatbot_response(
+            client,
             user_query,
             data,
-            first_message=first_message
+            first_message
         )
 
+        # Guardar historial
         st.session_state.chat_history.append(("Usuario", user_query))
         st.session_state.chat_history.append(("KRATOS", response))
 
