@@ -1,51 +1,20 @@
 import json
 import sqlite3
-from openai import OpenAI
-import os
 
-# ---------------------------
-# CLIENTE OPENAI SEGURO
-# ---------------------------
-
-def get_client():
-    """
-    Obtiene el cliente OpenAI correctamente configurado.
-    Compatible con Streamlit Cloud y ejecución local.
-    """
-    # Streamlit Cloud
-    try:
-        import streamlit as st
-        if "OPENAI_API_KEY" in st.secrets:
-            os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
-            return OpenAI()   # SDK nuevo → sin parámetros
-    except:
-        pass
-
-    # Local
-    if os.getenv("OPENAI_API_KEY"):
-        return OpenAI()
-
-    raise Exception("No se ha configurado la API Key de OpenAI.")
-
-client = get_client()
-
-
-# ---------------------------
-# SISTEMA KRATOS
-# ---------------------------
 
 SYSTEM_MESSAGE = """
 Eres KRATOS, un asistente virtual especializado exclusivamente en responder preguntas 
-sobre el catálogo de productos.
+sobre el catálogo de productos almacenado en la base de datos.
 
 Reglas:
-- SOLO responder preguntas del catálogo.
-- SOLO usar products_data.
-- Si la pregunta no es del catálogo:
+- SOLO puedes responder preguntas relacionadas al catálogo.
+- La única información válida proviene de products_data.
+- Si el usuario pregunta algo fuera del catálogo, responde:
   "Puedo ayudarte únicamente con consultas sobre nuestro catálogo de productos."
-- Tono amable, profesional y claro.
-- Moneda: Sol Peruano (S/).
-- Si hay 5 productos, mencionar que es una muestra limitada.
+- Mantén un tono amable, profesional y claro.
+- La moneda es el Sol Peruano (S/).
+- Si se devuelven 5 productos, menciona que es una muestra limitada.
+- No inventes información externa.
 """
 
 
@@ -53,7 +22,7 @@ Reglas:
 # GENERAR SQL
 # ---------------------------
 
-def generate_sql(user_query):
+def generate_sql(client, user_query):
     prompt = f"""
 Convierte esta consulta del usuario en SQL válido para SQLite.
 
@@ -79,7 +48,7 @@ Consulta del usuario: {user_query}
 
 
 # ---------------------------
-# EJECUTAR SQL EN SQLITE
+# EJECUTAR SQL
 # ---------------------------
 
 def run_sql_query(sql_query):
@@ -105,10 +74,10 @@ def run_sql_query(sql_query):
 
 
 # ---------------------------
-# RESPUESTA DEL CHATBOT KRATOS
+# GENERAR RESPUESTA PARA KRATOS
 # ---------------------------
 
-def generate_chatbot_response(user_query, product_data, first_message=False):
+def generate_chatbot_response(client, user_query, product_data, first_message=False):
 
     if first_message:
         intro = (
