@@ -1,61 +1,61 @@
 import json
 import sqlite3
-
+import openai
 
 SYSTEM_MESSAGE = """
-Eres KRATOS, un asistente virtual especializado exclusivamente en responder preguntas 
-sobre el catálogo de productos almacenado en la base de datos.
+Eres KRATOS, un asistente virtual especializado en responder únicamente preguntas
+sobre el catálogo de productos.
 
 Reglas:
-- SOLO puedes responder preguntas relacionadas al catálogo.
-- La única información válida proviene de products_data.
-- Si el usuario pregunta algo fuera del catálogo, responde:
+- Solo puedes responder sobre el catálogo.
+- Usa únicamente los datos entregados por la base de datos.
+- Si la pregunta no es del catálogo, responde:
   "Puedo ayudarte únicamente con consultas sobre nuestro catálogo de productos."
-- Mantén un tono amable, profesional y claro.
-- La moneda es el Sol Peruano (S/).
-- Si se devuelven 5 productos, menciona que es una muestra limitada.
-- No inventes información externa.
+- Tono amable, profesional y claro.
+- Moneda: Sol Peruano (S/).
+- Si retornas 5 productos, di que es una muestra limitada.
 """
 
-
-# ---------------------------------------
-# GENERAR SQL
-# ---------------------------------------
-
-def generate_sql(client, user_query):
+# ---------------------------------------------
+# SQL generation
+# ---------------------------------------------
+def generate_sql(user_query):
     prompt = f"""
 Convierte esta consulta del usuario en SQL válido para SQLite.
 
 Reglas:
-- SOLO devolver SQL.
+- SOLO devuelve SQL puro.
 - Máximo LIMIT 5.
-    "más caro" → ORDER BY prod_price DESC LIMIT 1
-    "más baratos" → ORDER BY prod_price ASC LIMIT 5
-    "ejemplo" → ORDER BY RANDOM() LIMIT 1
+- "más caro" → ORDER BY prod_price DESC LIMIT 1
+- "más barato" → ORDER BY prod_price ASC LIMIT 5
+- "ejemplo" → ORDER BY RANDOM() LIMIT 1
 - Solo productos con status = 1.
-- Categorías → WHERE prod_family LIKE '%texto%' LIMIT 5
+- Categoría/familia: WHERE prod_family LIKE '%texto%' LIMIT 5
 
 Consulta del usuario: {user_query}
 """
 
-    response = client.chat.completions.create(
-        model="gpt-4.1-mini",
+    resp = openai.ChatCompletion.create(
+        model="gpt-4-1106-preview",
         messages=[{"role": "user", "content": prompt}],
         temperature=0
     )
 
-    return response.choices[0].message.content.strip()
+    sql = resp["choices"][0]["message"]["content"].strip()
+    if not sql.lower().startswith("select"):
+        sql = "SELECT * FROM tbl_product WHERE status = 1 LIMIT 5"
 
+    return sql
 
-# ---------------------------------------
-# EJECUTAR SQL
-# ---------------------------------------
-
+# ---------------------------------------------
+# SQL execution
+# ---------------------------------------------
 def run_sql_query(sql_query):
     conn = sqlite3.connect("productos_soles.db")
     cur = conn.cursor()
 
     results = []
+
     queries = [q.strip() for q in sql_query.split(";") if q.strip()]
 
     for q in queries:
@@ -72,44 +72,39 @@ def run_sql_query(sql_query):
     conn.close()
     return results
 
-
-# ---------------------------------------
-# RESPUESTA DEL CHATBOT
-# ---------------------------------------
-
-def generate_chatbot_response(client, user_query, product_data, first_message=False):
-
+# ---------------------------------------------
+# Chat response
+# ---------------------------------------------
+def generate_chatbot_response(user_query, product_data, first_message=False):
     if first_message:
         intro = (
-            "Hola, soy **KRATOS**, tu asistente virtual del catálogo.\n"
-            "Fui desarrollado por el **Dr. Yeltsin**.\n"
-            "Estoy aquí para ayudarte únicamente con consultas sobre nuestros productos.\n\n"
+            "Hola, soy **KRATOS**, tu asistente virtual.\n"
+            "Fui desarrollado por el Dr. Yeltsin.\n"
+            "Estoy aquí para ayudarte solo con consultas del catálogo.\n\n"
         )
     else:
         intro = ""
 
     if product_data:
-        data_json = json.dumps(product_data, indent=2)
+        pjson = json.dumps(product_data, indent=2)
         user_prompt = (
-            f"{intro}"
-            f"El usuario consultó: {user_query}\n"
-            f"Productos encontrados:\n{data_json}\n\n"
-            "Crea una respuesta clara usando solo estos datos."
+            f"{intro}El usuario preguntó: {user_query}\n"
+            f"Productos encontrados:\n{pjson}\n\n"
+            "Genera una respuesta clara usando solo esta información."
         )
     else:
         user_prompt = (
-            f"{intro}"
-            f"El usuario consultó: {user_query}\n"
+            f"{intro}El usuario preguntó: {user_query}\n"
             "No se encontraron productos.\n"
             "Recuerda que solo puedes responder sobre el catálogo."
         )
 
-    response = client.chat.completions.create(
-        model="gpt-4.1-mini",
+    resp = openai.ChatCompletion.create(
+        model="gpt-4-1106-preview",
         messages=[
             {"role": "system", "content": SYSTEM_MESSAGE},
             {"role": "user", "content": user_prompt}
         ]
     )
 
-    return response.choices[0].message.content
+    return resp["choices"][0]["message"]["content"]
