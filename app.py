@@ -1,7 +1,7 @@
 import streamlit as st
 from openai import OpenAI
 import os
-from streamlit_webrtc import webrtc_streamer, AudioProcessorBase
+from streamlit_webrtc import webrtc_streamer, AudioProcessorBase, WebRtcMode
 from webrtc_utils import convert_frames_to_wav
 
 from db_utils import setup_database
@@ -16,13 +16,15 @@ def get_client():
     if not api_key:
         return None
 
-    # FIX: usar variable de entorno (Streamlit Cloud requiere este método)
+    # Streamlit Cloud requiere que la API key esté en variable de entorno
     os.environ["OPENAI_API_KEY"] = api_key
 
-    return OpenAI()  # sin parámetros
+    return OpenAI()  # sin parámetros → compatibilidad garantizada
+
+client = get_client()
 
 # ---------------------------
-# STREAMLIT
+# STREAMLIT UI
 # ---------------------------
 st.set_page_config(page_title="KRATOS — Asistente Virtual", page_icon="🤖")
 st.title("🤖 KRATOS — Asistente Virtual")
@@ -30,35 +32,32 @@ st.title("🤖 KRATOS — Asistente Virtual")
 st.image(
     "https://cdn-icons-png.flaticon.com/512/4712/4712109.png",
     width=130,
-    caption="KRATOS — Asistente Virtual"
+    caption="KRATOS — Tu asistente de catálogo"
 )
 
 # ---------------------------
-# BOTÓN BDD
+# BOTÓN CREAR BDD
 # ---------------------------
 if st.button("📦 Crear Base de Datos (500 productos)"):
     setup_database()
-    st.success("Base de datos creada exitosamente con 500 productos.")
+    st.success("La base de datos fue creada exitosamente con 500 productos.")
 
 
-# ---------------------------------------------------
+# ---------------------------
 # HISTORIAL DEL CHAT
-# ---------------------------------------------------
+# ---------------------------
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
 
-# ---------------------------------------------------
-# MOSTRAR HISTORIAL
-# ---------------------------------------------------
-st.subheader("📁 Conversación")
+st.subheader("🗂️ Conversación")
 for speaker, text in st.session_state.chat_history:
     st.markdown(f"**{speaker}:** {text}")
 
 
-# ---------------------------------------------------
-# PROCESADOR DE AUDIO (STREAMLIT-WEBRTC)
-# ---------------------------------------------------
+# ---------------------------
+# PROCESADOR DE AUDIO
+# ---------------------------
 class AudioProcessor(AudioProcessorBase):
     def __init__(self):
         self.frames = []
@@ -68,43 +67,49 @@ class AudioProcessor(AudioProcessorBase):
         return frame
 
 
-st.subheader("🎙️ Puedes hablarle a KRATOS")
+st.subheader("🎙️ Habla con KRATOS (Micrófono)")
 
+
+# ---------------------------
+# COMPONENTE WEBRTC (CORREGIDO)
+# ---------------------------
 webrtc_ctx = webrtc_streamer(
     key="speech-to-text-kratos",
-    mode="receive",
+    mode=WebRtcMode.RECVONLY,           # ← FIX IMPORTANTE
     audio_receiver_size=2048,
     media_stream_constraints={"audio": True, "video": False},
     async_processing=True,
+    processor_factory=AudioProcessor
 )
 
-
-# ---------------------------------------------------
-# PROCESAR AUDIO GRABADO
-# ---------------------------------------------------
+# ---------------------------
+# PROCESAR AUDIO RECIBIDO
+# ---------------------------
 if webrtc_ctx and webrtc_ctx.state.playing:
     if webrtc_ctx.audio_receiver:
         frames = webrtc_ctx.audio_receiver.get_frames(timeout=1)
+
         if frames:
+            st.info("🎤 Procesando tu audio...")
+
             wav_audio = convert_frames_to_wav(frames)
 
-            st.info("🎤 Procesando audio...")
-
+            # Transcripción con OpenAI
             transcript = client.audio.transcriptions.create(
                 model="gpt-4o-transcribe",
-                file=("audio.wav", wav_audio)
+                file=("kratos_audio.wav", wav_audio)
             ).text
 
             st.success(f"🗣️ Dijiste: {transcript}")
 
-            # Guardar en historial
+            # Guardar historial
             st.session_state.chat_history.append(("Usuario (audio)", transcript))
 
-            # Ejecutar consulta SQL
+            # SQL basado en la transcripción
             sql_query = generate_sql(client, transcript)
             products = run_sql_query(sql_query)
 
-            # Generar respuesta KRATOS
+            # Respuesta del bot
             first_msg = len(st.session_state.chat_history) == 0
             answer = generate_chatbot_response(client, transcript, products, first_msg)
 
@@ -112,12 +117,12 @@ if webrtc_ctx and webrtc_ctx.state.playing:
             st.rerun()
 
 
-# ---------------------------------------------------
+# ---------------------------
 # INPUT DE TEXTO
-# ---------------------------------------------------
-st.subheader("⌨️ O escríbele a KRATOS")
+# ---------------------------
+st.subheader("⌨️ Escribe tu consulta")
 
-user_text = st.chat_input("Escribe tu consulta y presiona ENTER")
+user_text = st.chat_input("Haz tu consulta sobre el catálogo")
 
 if user_text:
     st.session_state.chat_history.append(("Usuario", user_text))
