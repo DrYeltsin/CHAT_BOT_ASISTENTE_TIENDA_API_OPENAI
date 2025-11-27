@@ -25,13 +25,13 @@ client = get_client()
 # UI
 # ---------------------------
 
-st.set_page_config(page_title="KRATOS — Asistente de Catálogo", page_icon="🤖")
-st.title("🤖 KRATOS — Asistente de Catálogo")
+st.set_page_config(page_title="KRATOS — Asistente de Tienda", page_icon="🤖")
+st.title("🤖 KRATOS — Asistente de Virtual")
 
 st.image(
     "https://cdn-icons-png.flaticon.com/512/4712/4712109.png",
     width=130,
-    caption="KRATOS — Asistente de productos"
+    caption="KRATOS — Asistente de Virtual"
 )
 
 
