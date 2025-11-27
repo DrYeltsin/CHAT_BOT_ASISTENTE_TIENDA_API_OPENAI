@@ -7,7 +7,7 @@ from ai_utils import client, generate_sql, run_sql_query, generate_chatbot_respo
 #     INTERFAZ STREAMLIT
 # -------------------------
 
-st.set_page_config(page_title="KRATOS — Asistente de Catálogo", page_icon="🤖")
+st.set_page_config(page_title="KRATOS — Asistente de Tienda", page_icon="🤖")
 
 st.title("🤖 KRATOS — Asistente de Catálogo")
 
