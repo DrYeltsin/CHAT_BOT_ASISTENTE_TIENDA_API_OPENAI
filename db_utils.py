@@ -3,10 +3,8 @@ import random
 from faker import Faker
 
 fake = Faker("es_ES")
-
 DB_NAME = "productos_soles.db"
 NUM_PRODUCTS = 500
-
 
 def generate_random_product(product_id):
     families = ['Electrónica', 'Hogar', 'Oficina', 'Deportes', 'Accesorios']
@@ -23,7 +21,7 @@ def generate_random_product(product_id):
         prod_desc = "Silla con soporte lumbar ajustable."
     else:
         prod_name = f"Zapatillas {fake.color_name()} {fake.word()}"
-        prod_desc = f"Calzado deportivo talla {random.randint(35, 45)}."
+        prod_desc = f"Calzado talla {random.randint(35, 45)}."
 
     cost = round(random.uniform(50, 5000), 2)
     price = round(cost * random.uniform(1.2, 2.5), 2)
@@ -46,7 +44,6 @@ def generate_random_product(product_id):
         random.randint(5, 50),
         status,
     )
-
 
 def setup_database():
     conn = sqlite3.connect(DB_NAME)
@@ -82,7 +79,8 @@ def setup_database():
             prod_id, account_id, prod_name, prod_desc, prod_photo, prod_currency,
             prod_cost, prod_price, prod_suggested_prod_id, prod_family,
             prod_subfamily, prod_uom, prod_qr_code, prod_min_stock, status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, products)
 
     conn.commit()
