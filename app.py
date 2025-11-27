@@ -12,11 +12,14 @@ from ai_utils import generate_sql, run_sql_query, generate_chatbot_response
 # ---------------------------
 def get_client():
     api_key = st.secrets.get("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
+
     if not api_key:
         return None
-    return OpenAI(api_key=api_key)
 
-client = get_client()
+    # FIX: usar variable de entorno (Streamlit Cloud requiere este método)
+    os.environ["OPENAI_API_KEY"] = api_key
+
+    return OpenAI()  # sin parámetros
 
 # ---------------------------
 # STREAMLIT
